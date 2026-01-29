@@ -20,7 +20,6 @@
 
     <properties>
         <java.version>17</java.version>
-        <auth0.version>1.5.1</auth0.version>
     </properties>
 
     <dependencies>
@@ -54,7 +53,7 @@
         <dependency>
             <groupId>com.auth0</groupId>
             <artifactId>auth0-spring-security-api</artifactId>
-            <version>${auth0.version}</version>
+            <version>1.5.3</version>
         </dependency>
 
         <!-- Auth0 Management API -->

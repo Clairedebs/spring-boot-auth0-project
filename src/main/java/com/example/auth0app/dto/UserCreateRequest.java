@@ -1,5 +1,6 @@
 package com.example.auth0app.dto;
 
+import com.example.auth0app.validation.ValidRoles;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -25,5 +26,6 @@ public class UserCreateRequest {
     private String lastName;
 
     @NotEmpty(message = "At least one role is required")
+    @ValidRoles
     private Set<String> roles;
 }

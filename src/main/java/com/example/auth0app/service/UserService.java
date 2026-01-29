@@ -6,6 +6,7 @@ import com.auth0.client.mgmt.filter.UserFilter;
 import com.auth0.exception.Auth0Exception;
 import com.auth0.json.mgmt.users.User;
 import com.auth0.net.TokenRequest;
+import com.example.auth0app.config.Auth0Properties;
 import com.example.auth0app.dto.UserCreateRequest;
 import com.example.auth0app.dto.UserResponse;
 import com.example.auth0app.dto.UserUpdateRequest;
@@ -30,21 +31,14 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserRepository userRepository;
+    private final Auth0Properties auth0Properties;
+    
+    private String cachedManagementToken;
+    private long tokenExpiryTime;
 
-    @Value("${auth0.domain}")
-    private String domain;
-
-    @Value("${auth0.clientId}")
-    private String clientId;
-
-    @Value("${auth0.clientSecret}")
-    private String clientSecret;
-
-    @Value("${auth0.audience}")
-    private String audience;
-
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, Auth0Properties auth0Properties) {
         this.userRepository = userRepository;
+        this.auth0Properties = auth0Properties;
     }
 
     @Transactional
@@ -130,7 +124,7 @@ public class UserService {
             updateAuth0User(user);
         } catch (Auth0Exception e) {
             log.error("Failed to update user in Auth0: {}", e.getMessage());
-            // Continue with local update even if Auth0 fails
+            throw new Auth0ApiException("Failed to update user in Auth0. Changes rolled back.", e);
         }
 
         com.example.auth0app.entity.User updatedUser = userRepository.save(user);
@@ -159,15 +153,17 @@ public class UserService {
         auth0User.setName(request.getFirstName() + " " + request.getLastName());
         auth0User.setGivenName(request.getFirstName());
         auth0User.setFamilyName(request.getLastName());
-        auth0User.setConnection("Username-Password-Authentication");
-        auth0User.setPassword("TempPassword123!"); // In production, handle this differently
+        auth0User.setConnection(auth0Properties.getConnection());
+        
+        // Set email verified to trigger password reset email
+        auth0User.setEmailVerified(false);
+        auth0User.setVerifyEmail(true);
 
         User createdUser = mgmtApi.users().create(auth0User).execute().getBody();
         
         // Assign roles to the user in Auth0
         if (request.getRoles() != null && !request.getRoles().isEmpty()) {
-            // Note: Role assignment in Auth0 requires additional setup
-            // This is a placeholder for the actual implementation
+            // Note: Role assignment in Auth0 requires additional setup with Role IDs
             log.info("Roles to be assigned in Auth0: {}", request.getRoles());
         }
 
@@ -186,12 +182,29 @@ public class UserService {
     }
 
     private ManagementAPI getManagementAPI() throws Auth0Exception {
+        // Check if we have a cached token that's still valid
+        long currentTime = System.currentTimeMillis();
+        if (cachedManagementToken != null && currentTime < tokenExpiryTime) {
+            return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
+        }
+        
         // Get Management API token
-        AuthAPI authAPI = AuthAPI.newBuilder(domain, clientId, clientSecret).build();
-        TokenRequest tokenRequest = authAPI.requestToken(audience);
-        String token = tokenRequest.execute().getBody().getAccessToken();
+        AuthAPI authAPI = AuthAPI.newBuilder(
+            auth0Properties.getDomain(), 
+            auth0Properties.getClientId(), 
+            auth0Properties.getClientSecret()
+        ).build();
+        
+        // Request token for Management API
+        String managementAudience = "https://" + auth0Properties.getDomain() + "/api/v2/";
+        TokenRequest tokenRequest = authAPI.requestToken(managementAudience);
+        com.auth0.json.auth.TokenHolder tokenHolder = tokenRequest.execute().getBody();
+        
+        cachedManagementToken = tokenHolder.getAccessToken();
+        // Set expiry to 23 hours (tokens typically expire in 24 hours)
+        tokenExpiryTime = currentTime + (23 * 60 * 60 * 1000);
 
-        return ManagementAPI.newBuilder(domain, token).build();
+        return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
     }
 
     private String getCurrentAuth0UserId() {
@@ -206,7 +219,11 @@ public class UserService {
         try {
             String currentAuth0Id = getCurrentAuth0UserId();
             return user.getAuth0Id().equals(currentAuth0Id);
+        } catch (UnauthorizedException e) {
+            log.debug("No authenticated user found: {}", e.getMessage());
+            return false;
         } catch (Exception e) {
+            log.error("Error checking if current user: {}", e.getMessage());
             return false;
         }
     }

@@ -1,5 +1,6 @@
 package com.example.auth0app.dto;
 
+import com.example.auth0app.validation.ValidRoles;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -18,5 +19,6 @@ public class UserUpdateRequest {
     @NotBlank(message = "Last name is required")
     private String lastName;
 
+    @ValidRoles
     private Set<String> roles;
 }

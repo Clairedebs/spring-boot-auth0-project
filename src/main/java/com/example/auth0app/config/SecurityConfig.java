@@ -37,17 +37,17 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         // Public endpoints
                         .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
-                        // API endpoints - specific permissions
+                        // API endpoints - specific permissions (more specific patterns first)
+                        .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users").hasAuthority("ROLE_ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users/{id}").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/users/{id}").authenticated()
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**"))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         // Allow H2 console frames
