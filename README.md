@@ -116,6 +116,26 @@ mvn spring-boot:run
 
 The application will start on `http://localhost:8080`
 
+### Run with Dev Profile
+
+```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+### Verify Application is Running
+
+Check the health endpoint:
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+Expected response:
+```json
+{
+  "status": "UP"
+}
+```
+
 ### Access H2 Console
 
 - URL: `http://localhost:8080/h2-console`
@@ -277,6 +297,21 @@ Returns the health status of the application.
 ```
 
 ## Example API Requests
+
+### Postman Collection
+
+A complete Postman collection is available in `postman-collection.json`. Import this file into Postman to get started quickly with pre-configured requests.
+
+**To use the Postman collection:**
+
+1. Import `postman-collection.json` into Postman
+2. Update the collection variables:
+   - `auth0_domain`: Your Auth0 domain
+   - `auth0_client_id`: Your client ID
+   - `auth0_client_secret`: Your client secret
+   - `auth0_audience`: Your API audience
+3. Run the "Get Auth0 Token" request to authenticate
+4. The token will be automatically set for all other requests
 
 ### Using cURL
 
