@@ -25,8 +25,9 @@ public class Auth0ManagementService {
 
     private final Auth0Properties auth0Properties;
     
-    private String cachedManagementToken;
-    private long tokenExpiryTime;
+    private volatile String cachedManagementToken;
+    private volatile long tokenExpiryTime;
+    private final Object tokenLock = new Object();
 
     public Auth0ManagementService(Auth0Properties auth0Properties) {
         this.auth0Properties = auth0Properties;
@@ -184,35 +185,44 @@ public class Auth0ManagementService {
     }
 
     /**
-     * Get Management API access token
+     * Get Management API access token (thread-safe)
      */
     private ManagementAPI getManagementAPI() throws Auth0Exception {
-        // Check if we have a cached token that's still valid
+        // Check if we have a cached token that's still valid (outside lock for performance)
         long currentTime = System.currentTimeMillis();
         if (cachedManagementToken != null && currentTime < tokenExpiryTime) {
             return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
         }
         
-        log.debug("Getting new Management API token");
-        
-        // Get Management API token
-        AuthAPI authAPI = AuthAPI.newBuilder(
-            auth0Properties.getDomain(), 
-            auth0Properties.getManagement().getClientId(), 
-            auth0Properties.getManagement().getClientSecret()
-        ).build();
-        
-        // Request token for Management API
-        String managementAudience = "https://" + auth0Properties.getDomain() + "/api/v2/";
-        TokenRequest tokenRequest = authAPI.requestToken(managementAudience);
-        com.auth0.json.auth.TokenHolder tokenHolder = tokenRequest.execute().getBody();
-        
-        cachedManagementToken = tokenHolder.getAccessToken();
-        // Set expiry to 23 hours (tokens typically expire in 24 hours)
-        tokenExpiryTime = currentTime + (23 * 60 * 60 * 1000);
+        // Double-check locking pattern for thread-safe token refresh
+        synchronized (tokenLock) {
+            // Re-check after acquiring lock
+            currentTime = System.currentTimeMillis();
+            if (cachedManagementToken != null && currentTime < tokenExpiryTime) {
+                return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
+            }
+            
+            log.debug("Getting new Management API token");
+            
+            // Get Management API token
+            AuthAPI authAPI = AuthAPI.newBuilder(
+                auth0Properties.getDomain(), 
+                auth0Properties.getManagement().getClientId(), 
+                auth0Properties.getManagement().getClientSecret()
+            ).build();
+            
+            // Request token for Management API
+            String managementAudience = "https://" + auth0Properties.getDomain() + "/api/v2/";
+            TokenRequest tokenRequest = authAPI.requestToken(managementAudience);
+            com.auth0.json.auth.TokenHolder tokenHolder = tokenRequest.execute().getBody();
+            
+            cachedManagementToken = tokenHolder.getAccessToken();
+            // Set expiry to 23 hours (tokens typically expire in 24 hours)
+            tokenExpiryTime = currentTime + (23 * 60 * 60 * 1000);
 
-        log.debug("Management API token obtained successfully");
-        return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
+            log.debug("Management API token obtained successfully");
+            return ManagementAPI.newBuilder(auth0Properties.getDomain(), cachedManagementToken).build();
+        }
     }
 
     /**

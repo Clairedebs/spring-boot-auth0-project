@@ -44,8 +44,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/users")
                             .hasAnyAuthority("SCOPE_read:users", "ROLE_ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/users/**").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/users/**")
-                            .hasAnyAuthority("SCOPE_update:users", "ROLE_ADMIN", "authenticated")
+                        .requestMatchers(HttpMethod.PUT, "/api/users/**").authenticated()
                         .requestMatchers(HttpMethod.PATCH, "/api/users/*/roles")
                             .hasAnyAuthority("SCOPE_manage:roles", "ROLE_ADMIN")
                         // All other requests require authentication
