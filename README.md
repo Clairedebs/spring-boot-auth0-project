@@ -1,15 +1,15 @@
 # Spring Boot Auth0 Project
 
-A complete Spring Boot 3.x application with Auth0 authentication and user management API.
+A complete Spring Boot 3.x application with Auth0 authentication and user management API that interacts directly with Auth0 (no local database).
 
 ## Overview
 
 This project demonstrates a production-ready implementation of Auth0 integration with Spring Boot, including:
 - JWT-based authentication using Auth0
-- Role-based authorization (USER, ADMIN)
-- User management REST API
-- Integration with Auth0 Management API
-- H2 in-memory database for development
+- Role-based authorization with permissions
+- User management REST API that interacts directly with Auth0
+- Integration with Auth0 Management API for user CRUD operations
+- No local database - all user data stored in Auth0
 - Global exception handling
 - Input validation
 - CORS configuration for frontend integration
@@ -19,11 +19,9 @@ This project demonstrates a production-ready implementation of Auth0 integration
 - **Java 17**
 - **Spring Boot 3.2.1**
 - **Spring Security** with Auth0 integration
-- **Spring Data JPA**
-- **H2 Database**
+- **Auth0 Management API** for user management
 - **Lombok**
 - **Maven**
-- **Auth0 Management API**
 
 ## Prerequisites
 
@@ -51,20 +49,35 @@ Before running the application, you need to set up an Auth0 application and API:
 4. Set an identifier (e.g., "https://api.myapp.com")
 5. Note the **API Audience** (the identifier you just set)
 
-### 3. Configure Permissions (Optional)
+### 3. Configure Permissions
 
 1. In your API settings, go to the **Permissions** tab
-2. Add permissions like:
-   - `read:users`
-   - `write:users`
-   - `delete:users`
+2. Add permissions:
+   - `read:users` - Read user information
+   - `create:users` - Create new users
+   - `update:users` - Update user information
+   - `manage:roles` - Manage user roles
 
-### 4. Set up Roles
+### 4. Create a Machine-to-Machine Application for Management API
+
+1. Go to **Applications** → **Applications**
+2. Click **Create Application**
+3. Choose **Machine to Machine Applications**
+4. Select **Auth0 Management API** as the API
+5. Grant the following permissions:
+   - `read:users`
+   - `create:users`
+   - `update:users`
+   - `read:user_idp_tokens`
+6. Note the **Client ID** and **Client Secret** for this M2M application
+
+### 5. Set up Roles
 
 1. Go to **User Management** → **Roles**
 2. Create roles:
    - **ADMIN** - Full access
    - **USER** - Basic access
+3. Assign permissions to roles as needed
 
 ## Configuration
 
@@ -74,26 +87,26 @@ Set the following environment variables or update `application.properties`:
 
 ```bash
 export AUTH0_DOMAIN=your-domain.auth0.com
-export AUTH0_CLIENT_ID=your-client-id
-export AUTH0_CLIENT_SECRET=your-client-secret
 export AUTH0_AUDIENCE=your-api-audience
+export AUTH0_MANAGEMENT_CLIENT_ID=your-m2m-client-id
+export AUTH0_MANAGEMENT_CLIENT_SECRET=your-m2m-client-secret
 ```
 
 Or create a `.env` file in the project root:
 
 ```properties
 AUTH0_DOMAIN=your-domain.auth0.com
-AUTH0_CLIENT_ID=your-client-id
-AUTH0_CLIENT_SECRET=your-client-secret
 AUTH0_AUDIENCE=your-api-audience
+AUTH0_MANAGEMENT_CLIENT_ID=your-m2m-client-id
+AUTH0_MANAGEMENT_CLIENT_SECRET=your-m2m-client-secret
 ```
 
 ### Application Properties
 
 The application uses two profiles:
 
-- **Default**: Uses in-memory H2 database
-- **Dev**: Uses file-based H2 database with more verbose logging
+- **Default**: Production-ready configuration
+- **Dev**: Development with verbose logging
 
 To run with the dev profile:
 ```bash
@@ -136,13 +149,6 @@ Expected response:
 }
 ```
 
-### Access H2 Console
-
-- URL: `http://localhost:8080/h2-console`
-- JDBC URL: `jdbc:h2:mem:testdb`
-- Username: `sa`
-- Password: (leave blank)
-
 ## API Documentation
 
 ### Authentication
@@ -159,12 +165,13 @@ Authorization: Bearer <your-jwt-token>
 
 **POST** `/api/users`
 
-Creates a new user in both the local database and Auth0.
+Creates a new user directly in Auth0.
 
 **Request:**
 ```json
 {
   "email": "user@example.com",
+  "password": "SecurePassword123!",
   "firstName": "John",
   "lastName": "Doe",
   "roles": ["USER"]
@@ -174,57 +181,60 @@ Creates a new user in both the local database and Auth0.
 **Response:** `201 Created`
 ```json
 {
-  "id": 1,
+  "userId": "auth0|507f1f77bcf86cd799439011",
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
   "roles": ["USER"],
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T10:30:00"
+  "emailVerified": false,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
 }
 ```
 
-**Required Role:** `ADMIN`
+**Required Permission:** `create:users` or `ADMIN` role
 
 #### 2. Get All Users (Admin Only)
 
 **GET** `/api/users`
 
-Retrieves all users from the database.
+Retrieves all users from Auth0.
 
 **Response:** `200 OK`
 ```json
 [
   {
-    "id": 1,
+    "userId": "auth0|507f1f77bcf86cd799439011",
     "email": "user@example.com",
     "firstName": "John",
     "lastName": "Doe",
     "roles": ["USER"],
-    "createdAt": "2024-01-15T10:30:00",
-    "updatedAt": "2024-01-15T10:30:00"
+    "emailVerified": true,
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-15T10:30:00Z"
   }
 ]
 ```
 
-**Required Role:** `ADMIN`
+**Required Permission:** `read:users` or `ADMIN` role
 
-#### 3. Get User by ID
+#### 3. Get User by Auth0 User ID
 
-**GET** `/api/users/{id}`
+**GET** `/api/users/{auth0UserId}`
 
-Retrieves a specific user by ID. Users can view their own profile; admins can view any profile.
+Retrieves a specific user by their Auth0 user ID. Users can view their own profile; admins can view any profile.
 
 **Response:** `200 OK`
 ```json
 {
-  "id": 1,
+  "userId": "auth0|507f1f77bcf86cd799439011",
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
   "roles": ["USER"],
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T10:30:00"
+  "emailVerified": true,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
 }
 ```
 
@@ -232,9 +242,9 @@ Retrieves a specific user by ID. Users can view their own profile; admins can vi
 
 #### 4. Update User
 
-**PUT** `/api/users/{id}`
+**PUT** `/api/users/{auth0UserId}`
 
-Updates a user's information. Users can update their own profile (except roles); admins can update any profile including roles.
+Updates a user's information in Auth0. Users can update their own profile (except roles); admins can update any profile including roles.
 
 **Request:**
 ```json
@@ -248,38 +258,69 @@ Updates a user's information. Users can update their own profile (except roles);
 **Response:** `200 OK`
 ```json
 {
-  "id": 1,
+  "userId": "auth0|507f1f77bcf86cd799439011",
   "email": "user@example.com",
   "firstName": "Jane",
   "lastName": "Smith",
   "roles": ["USER", "ADMIN"],
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T11:00:00"
+  "emailVerified": true,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T11:00:00Z"
 }
 ```
 
-**Required:** Authenticated user (owner or admin)
+**Required:** Authenticated user (owner or `update:users` permission)
 
 #### 5. Get Current User
 
 **GET** `/api/users/me`
 
-Retrieves the profile of the currently authenticated user.
+Retrieves the profile of the currently authenticated user from Auth0.
 
 **Response:** `200 OK`
 ```json
 {
-  "id": 1,
+  "userId": "auth0|507f1f77bcf86cd799439011",
   "email": "user@example.com",
   "firstName": "John",
   "lastName": "Doe",
   "roles": ["USER"],
-  "createdAt": "2024-01-15T10:30:00",
-  "updatedAt": "2024-01-15T10:30:00"
+  "emailVerified": true,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z"
 }
 ```
 
 **Required:** Authenticated user
+
+#### 6. Update User Roles (Admin Only)
+
+**PATCH** `/api/users/{auth0UserId}/roles`
+
+Assigns or removes roles for a user in Auth0.
+
+**Request:**
+```json
+{
+  "roles": ["ADMIN", "USER"]
+}
+```
+
+**Response:** `200 OK`
+```json
+{
+  "userId": "auth0|507f1f77bcf86cd799439011",
+  "email": "user@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "roles": ["ADMIN", "USER"],
+  "emailVerified": true,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "updatedAt": "2024-01-15T11:00:00Z"
+}
+```
+
+**Required Permission:** `manage:roles` or `ADMIN` role
 
 ### Health Check Endpoints
 
@@ -423,11 +464,16 @@ The application is configured to allow CORS requests from:
 
 To add more origins, update the `SecurityConfig` class.
 
-### Role-Based Access Control
+### Permission-Based Access Control
 
-- **Public endpoints:** `/actuator/**`, `/h2-console/**`
-- **Admin only:** `POST /api/users`, `GET /api/users`
-- **Authenticated users:** `GET /api/users/me`, `GET /api/users/{id}`, `PUT /api/users/{id}`
+The API uses Auth0 permissions and roles for authorization:
+
+- **Public endpoints:** `/actuator/**`
+- **Admin or `create:users` permission:** `POST /api/users`
+- **Admin or `read:users` permission:** `GET /api/users`
+- **Any authenticated user:** `GET /api/users/me`, `GET /api/users/{auth0UserId}` (owner only)
+- **Owner or `update:users` permission:** `PUT /api/users/{auth0UserId}`
+- **Admin or `manage:roles` permission:** `PATCH /api/users/{auth0UserId}/roles`
 
 ## Project Structure
 
@@ -436,24 +482,26 @@ src/
 ├── main/
 │   ├── java/com/example/auth0app/
 │   │   ├── config/
+│   │   │   ├── Auth0Properties.java
 │   │   │   └── SecurityConfig.java
 │   │   ├── controller/
 │   │   │   └── UserController.java
 │   │   ├── dto/
 │   │   │   ├── UserCreateRequest.java
 │   │   │   ├── UserUpdateRequest.java
+│   │   │   ├── UserRolesRequest.java
 │   │   │   └── UserResponse.java
-│   │   ├── entity/
-│   │   │   └── User.java
 │   │   ├── exception/
 │   │   │   ├── Auth0ApiException.java
 │   │   │   ├── GlobalExceptionHandler.java
 │   │   │   ├── UnauthorizedException.java
 │   │   │   └── UserNotFoundException.java
-│   │   ├── repository/
-│   │   │   └── UserRepository.java
 │   │   ├── service/
+│   │   │   ├── Auth0ManagementService.java
 │   │   │   └── UserService.java
+│   │   ├── validation/
+│   │   │   ├── ValidRoles.java
+│   │   │   └── ValidRolesValidator.java
 │   │   └── Auth0Application.java
 │   └── resources/
 │       ├── application.properties
@@ -485,14 +533,16 @@ java -jar target/spring-boot-auth0-project-1.0.0.jar
    - Verify your Auth0 credentials are correct
    - Ensure the audience matches your Auth0 API identifier
    - Check that your Auth0 domain includes `.auth0.com`
+   - Verify Management API client has proper permissions
 
 2. **403 Forbidden Errors**
-   - Ensure your JWT token includes the required roles
+   - Ensure your JWT token includes the required permissions/scopes
    - Verify roles are properly assigned in Auth0
+   - Check that the M2M application has the necessary Management API permissions
 
-3. **H2 Console Not Accessible**
-   - Ensure `spring.h2.console.enabled=true` in properties
-   - Check that you're accessing the correct path `/h2-console`
+3. **User Not Found Errors**
+   - Ensure you're using the Auth0 user ID (format: `auth0|...`)
+   - Check that the user exists in Auth0
 
 ## Contributing
 

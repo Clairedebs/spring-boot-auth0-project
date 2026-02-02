@@ -2,6 +2,7 @@ package com.example.auth0app.controller;
 
 import com.example.auth0app.dto.UserCreateRequest;
 import com.example.auth0app.dto.UserResponse;
+import com.example.auth0app.dto.UserRolesRequest;
 import com.example.auth0app.dto.UserUpdateRequest;
 import com.example.auth0app.service.UserService;
 import jakarta.validation.Valid;
@@ -35,19 +36,19 @@ public class UserController {
         return ResponseEntity.ok(users);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
-        log.info("GET /api/users/{} - Fetching user by id", id);
-        UserResponse response = userService.getUserById(id);
+    @GetMapping("/{auth0UserId}")
+    public ResponseEntity<UserResponse> getUserById(@PathVariable String auth0UserId) {
+        log.info("GET /api/users/{} - Fetching user by Auth0 ID", auth0UserId);
+        UserResponse response = userService.getUserById(auth0UserId);
         return ResponseEntity.ok(response);
     }
 
-    @PutMapping("/{id}")
+    @PutMapping("/{auth0UserId}")
     public ResponseEntity<UserResponse> updateUser(
-            @PathVariable Long id,
+            @PathVariable String auth0UserId,
             @Valid @RequestBody UserUpdateRequest request) {
-        log.info("PUT /api/users/{} - Updating user", id);
-        UserResponse response = userService.updateUser(id, request);
+        log.info("PUT /api/users/{} - Updating user", auth0UserId);
+        UserResponse response = userService.updateUser(auth0UserId, request);
         return ResponseEntity.ok(response);
     }
 
@@ -55,6 +56,15 @@ public class UserController {
     public ResponseEntity<UserResponse> getCurrentUser() {
         log.info("GET /api/users/me - Fetching current user");
         UserResponse response = userService.getCurrentUser();
+        return ResponseEntity.ok(response);
+    }
+
+    @PatchMapping("/{auth0UserId}/roles")
+    public ResponseEntity<UserResponse> updateUserRoles(
+            @PathVariable String auth0UserId,
+            @Valid @RequestBody UserRolesRequest request) {
+        log.info("PATCH /api/users/{}/roles - Updating user roles", auth0UserId);
+        UserResponse response = userService.updateUserRoles(auth0UserId, request.getRoles());
         return ResponseEntity.ok(response);
     }
 }
