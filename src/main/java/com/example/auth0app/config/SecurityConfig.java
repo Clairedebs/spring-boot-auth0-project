@@ -36,22 +36,24 @@ public class SecurityConfig {
                 .configure(http)
                 .authorizeHttpRequests(authorize -> authorize
                         // Public endpoints
-                        .requestMatchers("/actuator/**", "/h2-console/**").permitAll()
-                        // API endpoints - specific permissions (more specific patterns first)
+                        .requestMatchers("/actuator/**").permitAll()
+                        // API endpoints with permission-based authorization
                         .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/users").hasAuthority("ROLE_ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/users").hasAuthority("ROLE_ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/users/{id}").authenticated()
-                        .requestMatchers(HttpMethod.PUT, "/api/users/{id}").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/users")
+                            .hasAnyAuthority("SCOPE_create:users", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/users")
+                            .hasAnyAuthority("SCOPE_read:users", "ROLE_ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/users/**").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/users/**")
+                            .hasAnyAuthority("SCOPE_update:users", "ROLE_ADMIN", "authenticated")
+                        .requestMatchers(HttpMethod.PATCH, "/api/users/*/roles")
+                            .hasAnyAuthority("SCOPE_manage:roles", "ROLE_ADMIN")
                         // All other requests require authentication
                         .anyRequest().authenticated()
                 )
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/h2-console/**"))
+                .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
-
-        // Allow H2 console frames
-        http.headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()));
 
         return http.build();
     }
@@ -60,7 +62,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:4200"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);

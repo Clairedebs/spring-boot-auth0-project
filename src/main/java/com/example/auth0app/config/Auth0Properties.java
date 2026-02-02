@@ -12,8 +12,14 @@ import org.springframework.stereotype.Component;
 public class Auth0Properties {
     
     private String domain;
-    private String clientId;
-    private String clientSecret;
     private String audience;
     private String connection = "Username-Password-Authentication";
+    private Management management = new Management();
+    
+    @Getter
+    @Setter
+    public static class Management {
+        private String clientId;
+        private String clientSecret;
+    }
 }
